@@ -1,0 +1,6 @@
+data/
+*.csv
+!results/*.csv
+__pycache__/
+*.ckpt
+.venv/

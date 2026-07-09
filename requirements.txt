@@ -1,0 +1,10 @@
+# Python 3.10-3.12. For strict reproducibility across machines, run
+# `pip freeze > requirements.lock` after first install and commit it.
+pandas>=2.0,<3
+numpy>=1.26
+scikit-learn>=1.4
+xgboost>=2.0
+statsmodels>=0.14
+matplotlib>=3.8
+tabpfn>=7.0     # OSS package; TabPFN-3 default checkpoint. GPU recommended.
+# Do NOT install tabpfn-client for internal-data work (hosted API).
