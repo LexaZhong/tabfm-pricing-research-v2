@@ -80,9 +80,11 @@ class TabPFNFrequency:
     project (cf. Deprez et al. 2026, arXiv:2605.22892).
     """
 
-    def __init__(self, max_context: int = 50_000, device: str = "auto"):
+    def __init__(self, max_context: int = 50_000, device: str = "auto",
+                 predict_batch_size: int = 1000):
         self.max_context = max_context
         self.device = device
+        self.predict_batch_size = predict_batch_size
 
     def fit(self, train: pd.DataFrame):
         from tabpfn import TabPFNRegressor
@@ -100,7 +102,12 @@ class TabPFNFrequency:
         X = test[schema.features() + ["Exposure"]].copy()
         for c in schema.CATEGORICAL:
             X[c] = X[c].cat.codes
-        rate = np.clip(self.model.predict(X.values), a_min=0, a_max=None)
+        Xv = X.values
+        # Batch predictions: TabPFN's attention scales with query batch size,
+        # and MPS/GPU memory can't hold a large test set in one forward pass.
+        chunks = [self.model.predict(Xv[i:i + self.predict_batch_size])
+                  for i in range(0, len(Xv), self.predict_batch_size)]
+        rate = np.clip(np.concatenate(chunks), a_min=0, a_max=None)
         return rate * test["Exposure"].values
 
 
