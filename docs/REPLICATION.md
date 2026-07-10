@@ -42,6 +42,28 @@ calibration metrics), but you should reproduce all four qualitative findings:
 3. TabPFN seed-to-seed variance exceeds GLM/XGBoost.
 4. TabPFN inference time exceeds GLM/XGBoost total time even at small contexts.
 
+## Option A-GPU: Google Colab (free GPU)
+
+No local GPU, or hitting the Apple Silicon MPS out-of-memory error? Colab's
+free tier gives a T4 GPU, which sidesteps both problems (see the caveat in
+`src/models.py`'s `TabPFNFrequency.predict_batch_size` docstring — batching
+still helps but matters much less with a discrete GPU's larger VRAM).
+
+1. Open [colab.research.google.com](https://colab.research.google.com),
+   `File -> Upload notebook`, and pick `notebooks/colab_quickstart.ipynb`
+   from this repo (or open it directly from GitHub via
+   `File -> Open notebook -> GitHub` and search this repo).
+2. `Runtime -> Change runtime type -> T4 GPU`.
+3. Run the cells top to bottom. If the repo is private, the token cell
+   prompts for a GitHub personal access token (hidden input, never saved to
+   the notebook); leave it blank for a public repo.
+4. The quickstart cell runs the test command
+   `python src/run_benchmark.py --models tabpfn --sample-sizes 2000 --seeds 42`;
+   edit the `--sample-sizes`/`--seeds`/`--models` args for the full sweep.
+5. Download `results/*.csv` via the Colab file browser, or copy to Drive
+   (last cell) before the runtime recycles — Colab free tier does not
+   persist the VM's disk between sessions.
+
 ## Option B: authors' exact code
 
 For an exact replication: https://github.com/B-Deprez/tabpfn_insurance
