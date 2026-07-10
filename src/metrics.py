@@ -7,6 +7,9 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import mean_poisson_deviance
 
+# numpy.trapezoid replaced the deprecated numpy.trapz in NumPy 2.0; support both.
+_trapezoid = getattr(np, "trapezoid", None) or np.trapz
+
 
 def poisson_deviance(y_counts, pred_counts):
     pred = np.clip(pred_counts, 1e-9, None)
@@ -26,7 +29,7 @@ def gini_index(y_counts, pred_counts, exposure):
     exp_c = np.cumsum(exposure[order]) / exposure.sum()
     claims_c = np.cumsum(y_counts[order]) / y_counts.sum()
     # area between diagonal and Lorenz curve, trapezoid rule
-    return 1 - 2 * np.trapezoid(claims_c, exp_c)
+    return 1 - 2 * _trapezoid(claims_c, exp_c)
 
 
 def decile_lift(y_counts, pred_counts, exposure, n_bins=10) -> pd.DataFrame:
