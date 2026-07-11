@@ -37,18 +37,34 @@ class GLMFrequency:
         return self.pipe.predict(test[schema.features()]) * test["Exposure"].values
 
 
+# Poisson XGBoost hyperparameters from the reference paper (Henckaerts et al.):
+# shallow trees, many rounds, slow learning rate. n_estimators maps to
+# num_boost_round in the low-level train() API used below.
+_HENCKAERTS_PARAMS = {
+    "max_depth": 3,
+    "learning_rate": 0.01,
+    "subsample": 0.75,
+    "tree_method": "hist",   # fast histogram method
+    "seed": 42,              # xgb.train's name for random_state
+    "verbosity": 0,
+}
+_HENCKAERTS_NUM_ROUNDS = 500  # paper's n_estimators
+
+
 class XGBFrequency:
-    """XGBoost Poisson with log(exposure) offset via base_margin."""
+    """XGBoost Poisson with log(exposure) offset via base_margin.
+
+    Defaults follow the reference paper (Henckaerts et al.); override any of
+    them (or num_rounds) via keyword args.
+    """
 
     def __init__(self, **params):
         import xgboost as xgb
         self.xgb = xgb
+        self.num_rounds = params.pop("num_rounds", _HENCKAERTS_NUM_ROUNDS)
         self.params = {
-            "objective": "count:poisson", "tree_method": "hist",
-            "learning_rate": 0.05, "max_depth": 5, "min_child_weight": 5,
-            "subsample": 0.8, "colsample_bytree": 0.8, **params,
+            "objective": "count:poisson", **_HENCKAERTS_PARAMS, **params,
         }
-        self.num_rounds = params.pop("num_rounds", 400)
 
     def _dmatrix(self, df, with_label=True):
         X = pd.get_dummies(df[schema.features()], columns=schema.CATEGORICAL)

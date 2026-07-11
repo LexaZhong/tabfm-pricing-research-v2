@@ -21,6 +21,18 @@ def total_calibration(y_counts, pred_counts):
     return pred_counts.sum() / y_counts.sum()
 
 
+def rmse(y_counts, pred_counts, exposure):
+    """Exposure-weighted RMSE on claim frequency (counts / exposure).
+
+    Reported only alongside the Poisson deviance / Gini / calibration metrics,
+    never alone: RMSE is not a Poisson-aware loss and penalises the (rare) high
+    counts disproportionately (see CLAUDE.md conventions).
+    """
+    y_rate = y_counts / exposure
+    pred_rate = pred_counts / exposure
+    return np.sqrt(np.average((y_rate - pred_rate) ** 2, weights=exposure))
+
+
 def gini_index(y_counts, pred_counts, exposure):
     """Exposure-weighted Gini from the Lorenz curve, ordering policies by
     predicted frequency (pred/exposure). Higher = better risk ranking."""
@@ -52,4 +64,5 @@ def evaluate(y_counts, pred_counts, exposure) -> dict:
         "poisson_deviance": poisson_deviance(y_counts, pred_counts),
         "gini": gini_index(y_counts, pred_counts, exposure),
         "total_calibration": total_calibration(y_counts, pred_counts),
+        "rmse": rmse(y_counts, pred_counts, exposure),
     }
