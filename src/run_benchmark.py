@@ -30,7 +30,7 @@ from metrics import evaluate
 def run_one(name, train, test, tabpfn_context, tabpfn_predict_batch_size):
     kwargs = ({"max_context": tabpfn_context,
                "predict_batch_size": tabpfn_predict_batch_size}
-              if name == "tabpfn" else {})
+              if name.startswith("tabpfn") else {})
     model = MODELS[name](**kwargs)
     t0 = time.time(); model.fit(train); t_fit = time.time() - t0
     t0 = time.time(); pred = model.predict_counts(test); t_pred = time.time() - t0
@@ -52,6 +52,11 @@ def main():
     p.add_argument("--internal-csv", type=str, default=None)
     p.add_argument("--config", type=str, default=None)
     args = p.parse_args()
+    if args.internal_csv and "tabpfn-client" in args.models:
+        raise SystemExit(
+            "Refusing tabpfn-client on internal data: the hosted API uploads "
+            "rows to an external service. Use --models tabpfn (local) for "
+            "internal data (see CLAUDE.md guardrails).")
     t0_total = time.time()
 
     bucket_col = None

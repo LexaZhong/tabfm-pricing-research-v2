@@ -70,7 +70,7 @@ class XGBFrequency:
         return self.booster.predict(d)  # base_margin already includes exposure
 
 
-class TabPFNFrequency:
+class _TabPFNFrequencyBase:
     """TabPFN regressor on claim frequency (rate), Exposure also as feature.
 
     CAVEAT: TabPFN has no native Poisson objective, offset, or sample
@@ -78,37 +78,70 @@ class TabPFNFrequency:
     additional feature, then multiply predictions by exposure. Document this
     choice in any writeup; it is one of the fair-comparison questions of the
     project (cf. Deprez et al. 2026, arXiv:2605.22892).
+
+    Subclasses supply the backend regressor (local OSS package vs hosted API).
     """
 
-    def __init__(self, max_context: int = 50_000, device: str = "auto",
-                 predict_batch_size: int = 1000):
+    def __init__(self, max_context: int = 50_000, predict_batch_size: int = 1000):
         self.max_context = max_context
-        self.device = device
         self.predict_batch_size = predict_batch_size
 
+    def _make_regressor(self):  # local vs hosted backend
+        raise NotImplementedError
+
+    def _encode(self, df: pd.DataFrame) -> np.ndarray:
+        X = df[schema.features() + ["Exposure"]].copy()
+        for c in schema.CATEGORICAL:  # ordinal-encode; TabPFN handles raw numerics
+            X[c] = X[c].cat.codes
+        return X.values
+
     def fit(self, train: pd.DataFrame):
-        from tabpfn import TabPFNRegressor
         t = train
         if len(t) > self.max_context:
             t = t.sample(self.max_context, random_state=0)
-        X = t[schema.features() + ["Exposure"]].copy()
-        for c in schema.CATEGORICAL:  # ordinal-encode; TabPFN handles raw numerics
-            X[c] = X[c].cat.codes
-        self.model = TabPFNRegressor(device=self.device)
-        self.model.fit(X.values, t["Frequency"].values)
+        self.model = self._make_regressor()
+        self.model.fit(self._encode(t), t["Frequency"].values)
         return self
 
     def predict_counts(self, test: pd.DataFrame) -> np.ndarray:
-        X = test[schema.features() + ["Exposure"]].copy()
-        for c in schema.CATEGORICAL:
-            X[c] = X[c].cat.codes
-        Xv = X.values
+        Xv = self._encode(test)
         # Batch predictions: TabPFN's attention scales with query batch size,
-        # and MPS/GPU memory can't hold a large test set in one forward pass.
+        # and local GPU/MPS memory (or the hosted API request size) can't hold
+        # a large test set in one forward pass.
         chunks = [self.model.predict(Xv[i:i + self.predict_batch_size])
                   for i in range(0, len(Xv), self.predict_batch_size)]
         rate = np.clip(np.concatenate(chunks), a_min=0, a_max=None)
         return rate * test["Exposure"].values
 
 
-MODELS = {"glm": GLMFrequency, "xgboost": XGBFrequency, "tabpfn": TabPFNFrequency}
+class TabPFNFrequency(_TabPFNFrequencyBase):
+    """Local TabPFN via the OSS `tabpfn` package. GPU recommended; on CPU it is
+    capped at ~1000 rows unless TABPFN_ALLOW_CPU_LARGE_DATASET=1."""
+
+    def __init__(self, max_context: int = 50_000, device: str = "auto",
+                 predict_batch_size: int = 1000):
+        super().__init__(max_context, predict_batch_size)
+        self.device = device
+
+    def _make_regressor(self):
+        from tabpfn import TabPFNRegressor
+        return TabPFNRegressor(device=self.device)
+
+
+class TabPFNClientFrequency(_TabPFNFrequencyBase):
+    """Hosted TabPFN via the `tabpfn-client` API: inference runs on Prior Labs'
+    GPU servers, so no local GPU is needed (e.g. a CPU-only Colab runtime).
+
+    DATA CAVEAT: every fit/predict uploads the feature rows to an external
+    service. Public datasets only -- never point this at internal data (see the
+    guardrails in CLAUDE.md and requirements.txt). run_benchmark.py refuses to
+    combine this model with --internal-csv.
+    """
+
+    def _make_regressor(self):
+        from tabpfn_client import TabPFNRegressor
+        return TabPFNRegressor()
+
+
+MODELS = {"glm": GLMFrequency, "xgboost": XGBFrequency,
+          "tabpfn": TabPFNFrequency, "tabpfn-client": TabPFNClientFrequency}

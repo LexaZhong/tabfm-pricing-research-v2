@@ -7,4 +7,7 @@ xgboost>=2.0
 statsmodels>=0.14
 matplotlib>=3.8
 tabpfn>=7.0     # OSS package; TabPFN-3 default checkpoint. GPU recommended.
-# Do NOT install tabpfn-client for internal-data work (hosted API).
+# tabpfn-client: OPTIONAL, PUBLIC-DATA ONLY. Hosted API (uploads feature rows
+# to Prior Labs' GPU servers) for CPU-only runs, e.g. Colab with no GPU.
+# Install on demand:  pip install tabpfn-client
+# Do NOT install/use for internal-data work (hosted API).
